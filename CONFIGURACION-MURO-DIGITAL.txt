@@ -1,0 +1,203 @@
+==============================================================================
+  MURO DIGITAL UNIVERSITARIO - RESUMEN DE CONFIGURACION
+  Proyecto Firebase: muro-clases
+  App publicada: https://app-muro-texto.vercel.app
+  Fecha de este resumen: 8 de octubre de 2026
+==============================================================================
+
+
+  1. DATOS PARA GUARDAR (los vas a necesitar)
+==============================================================================
+
+  Clave de API de Firebase (la NUEVA, la que funciona):
+
+      AIzaSyDm6lefBl94d3RJaDeJfg8QAQRhbbzmU8o
+
+  UID de la cuenta docente responsable (Pablo Sela):
+
+      N0HtEZBV3ibY84jHHCHQsR9DQHF2
+
+  Proyecto de Firebase:   muro-clases
+  Dominio autorizado:     app-muro-texto.vercel.app  (y localhost)
+
+  IMPORTANTE SOBRE LA CLAVE:
+  - Esta clave no es un secreto: va dentro del sitio web y cualquiera puede
+    verla. Lo que protege la base son las REGLAS de Firestore, no la clave.
+  - La clave VIEJA (la que termina en XEy4Sq0) tenia un problema interno y
+    por eso no dejaba iniciar sesion. Se reemplazo por esta nueva.
+  - En la app, la clave vive en el archivo .env de la carpeta del proyecto.
+  - En Vercel hay que cargarla como variable de entorno (ver punto 5).
+
+
+  2. QUE SE ARREGLO (y por que)
+==============================================================================
+
+  El correo de Firebase avisaba que las reglas de la base vencían a los 30
+  días. Eso pasaba porque el proyecto estaba en "modo de prueba", que deja la
+  base abierta a cualquiera en Internet. La fecha exacta del vencimiento era
+  el 13 de octubre de 2026; despues de esa fecha la app iba a dejar de
+  funcionar por completo (nadie podia crear sesiones ni responder).
+
+  Solucion aplicada:
+  - Se crearon reglas de seguridad nuevas, que NO vencen.
+  - Se habilito el ingreso con Google para el equipo docente.
+  - La app ahora pide la cuenta docente para crear sesiones y para manejar
+    el proyector. Los alumnos NO necesitan cuenta: entran con el codigo o
+    el QR, igual que siempre.
+
+  COMPROBADO (con prueba tecnica desde afuera):
+  - Lectura anonima de sesiones: PERMITIDA  (HTTP 200). La necesitan los alumnos.
+  - Escritura anonima: RECHAZADA (HTTP 403, "Missing or insufficient
+    permissions"). La base ya no esta abierta a Internet.
+  - Crear una sesion desde la app con la cuenta docente: FUNCIONA.
+
+
+  3. LO QUE PUEDE HACER CADA ROL AHORA
+==============================================================================
+
+  ALUMNO (sin cuenta, entra por QR o codigo):
+  - Ver la consigna de la clase.
+  - Ver el contador de respuestas en vivo.
+  - Enviar su respuesta (una por vez, hasta 1000 caracteres).
+  - NO puede borrar nada, ni editar lo enviado, ni revelar las opiniones.
+
+  DOCENTE (con su cuenta de Google autorizada):
+  - Todo lo del alumno, y ademas: revelar u ocultar opiniones, pausar o
+    reanudar los envios, limpiar respuestas, crear y borrar sesiones.
+
+  CUALQUIER OTRA PERSONA EN INTERNET:
+  - No puede hacer absolutamente nada, ni siquiera leer las clases.
+
+
+  4. COMO SUMAR A OTROS DOCENTES DEL EQUIPO (30 segundos cada uno)
+==============================================================================
+
+  Paso 1. Que la persona entre UNA vez a la app con su cuenta de Google
+          (boton "Ingresar docente" o "Ingresar con Google").
+  Paso 2. En Firebase: Authentication -> Usuarios. Copiar su "User UID".
+  Paso 3. En Firebase: Firestore Database -> Datos.
+          - Si no existe la coleccion "docentes", crearla.
+          - Adentro, crear un documento cuyo ID sea ese UID (el nombre del
+            documento es el UID; no hace falta que tenga campos adentro, o
+            se le puede poner un campo "email" con su correo para acordarse).
+  Paso 4. Listo: esa persona ya puede manejar el proyector.
+
+  PARA DAR DE BAJA a alguien: borrar su documento de la coleccion "docentes"
+  y, si se quiere, borrar tambien su usuario en Authentication -> Usuarios.
+
+  SI ALGUNA VEZ TE QUEDAS AFUERA DE LA APP: la lista de docentes se puede
+  editar desde Firestore -> Datos, porque la consola de Firebase no pasa por
+  las reglas de seguridad. Nunca te vas a encerrar afuera.
+
+
+  5. LO UNICO QUE FALTA: PUBLICAR EN VERCEL
+==============================================================================
+
+  Que falta: la app publicada en Vercel todavia tiene la version vieja, sin
+  login y con la clave de API vieja. Mientras tanto la app publicada sigue
+  funcionando para los alumnos (responder, ver el muro), pero los docentes no
+  pueden iniciar sesion ahi.
+
+  TAREA 1. Cargar la clave nueva en Vercel:
+    - Entrar a https://vercel.com/dashboard y abrir el proyecto app-muro-texto.
+    - Settings -> Environment Variables.
+    - Buscar la variable VITE_FIREBASE_API_KEY.
+    - Editarla (o borrarla y crearla de nuevo) con el valor de la clave nueva
+      que figura en el punto 1 de este resumen.
+    - Guardar.
+
+  TAREA 2. Publicar la version nueva del codigo:
+    - Averiguar como esta conectado el proyecto (Settings -> Git).
+    - Si esta conectado a GitHub: subir los cambios a ese repositorio y
+      Vercel reconstruye la app solo en un par de minutos.
+    - Si NO esta conectado: se publica de otra forma (subida manual o con
+      la terminal); averiguarlo en Vercel y avisarme para dar los pasos.
+
+  TAREA 3. Probar en https://app-muro-texto.vercel.app:
+    - Ingresar con Google desde la barra superior.
+    - Crear una sesion de prueba y comprobar que aparece el QR.
+    - Abrir el enlace de estudiante y enviar una respuesta de prueba.
+
+
+  6. COMO USAR LA APP EN CLASE (resumen rapido)
+==============================================================================
+
+  1. Iniciar sesion con la cuenta docente (solo la primera vez en cada
+     computadora; despues queda recordada).
+  2. Crear la sesion: poner la materia y la consigna o pregunta disparadora.
+  3. Proyectar en pantalla: aparece el codigo y el QR grandes.
+  4. Los alumnos escanean el QR con el celular y responden (sin registrarse).
+  5. Revelar las opiniones cuando quieras debatir.
+  6. Pausar los envios si hay que cerrar la participacion.
+  7. Guardar en PDF o descargar el texto para subir al campus virtual.
+  8. "Limpiar respuestas" para reutilizar el mismo codigo con otra comision.
+
+  PARA PROBAR EN TU COMPUTADORA:
+    - Abrir PowerShell en la carpeta del proyecto (cd "E:\ANTIGRAVITY_APP_MURO_TEXTO")
+    - Ejecutar:  npm run dev
+    - Abrir:     http://localhost:5173
+
+
+  7. DONDE ESTA CADA COSA
+==============================================================================
+
+  Carpeta del proyecto:  E:\ANTIGRAVITY_APP_MURO_TEXTO
+
+  - firestore.rules ....... Las reglas de seguridad (el "reglamento" de la
+                            base). Cargado en Firebase y guardado aca.
+  - .env .................. Configuracion y clave de API de la app.
+  - README-SEGURIDAD.md ... Explicacion larga de todo el tema de seguridad,
+                            con los pasos detallados y en castellano.
+  - src/auth.js ........... El ingreso con Google dentro de la app.
+  - src/views/ ............ Las pantallas (inicio, docente/proyector, alumno).
+  - scripts/probar-permisos-firestore.mjs
+                            Prueba tecnica: confirma que la base rechaza
+                            escrituras anonimas.
+
+  UN DATO IMPORTANTE: el archivo firestore.rules NO debe llevar acentos ni
+  enies. La consola de Firebase los rechaza con errores de sintaxis. La
+  explicacion con acentos vive en README-SEGURIDAD.md.
+
+
+  8. COSAS OPCIONALES PARA MAS ADELANTE
+==============================================================================
+
+  - Restringir la clave nueva a los dominios web (localhost y
+    app-muro-texto.vercel.app): es una capa extra de proteccion. Se hace en
+    Google Cloud -> APIs y servicios -> Credenciales -> la clave nueva ->
+    Restricciones de aplicaciones -> Sitios web.
+  - Agregar la IP de red (por ejemplo 192.168.1.15) a los dominios
+    autorizados de Firebase, si algun docente necesita ingresar desde otro
+    dispositivo de la red del aula. A los alumnos no les afecta.
+  - Que las opiniones no sean publicas antes de revelarlas: hoy la lectura es
+    publica porque la pantalla del alumno necesita el contador en vivo. Se
+    puede cambiar, pero requiere modificar la app.
+
+
+  9. PREGUNTAS FRECUENTES
+==============================================================================
+
+  P: Tengo que pagar algo?
+  R: No. El proyecto esta en el plan Spark (gratuito) y este uso entra
+     comodamente en ese plan. No hay riesgo de facturacion.
+
+  P: Los alumnos van a tener que crear una cuenta?
+  R: No. Siguen entrando con el codigo o el QR, sin registro y sin contrasena.
+     Solo los docentes inician sesion.
+
+  P: Y si me olvido la clave o se filtra?
+  R: La clave no es un secreto; la proteccion real son las reglas. Si alguna
+     vez hay que cambiarla, se crea una nueva en Google Cloud -> Credenciales
+     y se actualiza en el archivo .env y en Vercel.
+
+  P: Vuelve a vencer alguna vez?
+  R: No. Las reglas nuevas no tienen fecha de vencimiento.
+
+  P: Que pasa si un alumno entra a la fuerza a la pantalla de docente?
+  R: Va a ver el aviso "Panel del docente" con el boton de ingresar, pero sin
+     la cuenta autorizada no puede hacer nada: las reglas de la base rechazan
+     cualquier accion de control.
+
+==============================================================================
+  FIN DEL RESUMEN
+==============================================================================

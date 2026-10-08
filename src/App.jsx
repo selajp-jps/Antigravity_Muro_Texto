@@ -3,10 +3,25 @@ import Navbar from './components/Navbar';
 import HomeView from './views/HomeView';
 import TeacherView from './views/TeacherView';
 import StudentView from './views/StudentView';
+import { observarSesion } from './auth';
 
 export default function App() {
   // Current route state: { view: 'home' | 'teacher' | 'student', sessionCode: string }
   const [route, setRoute] = useState(() => parseCurrentRoute());
+
+  // Cuenta del docente que inició sesión (null si nadie lo hizo todavía).
+  // Los alumnos no necesitan cuenta: esta sesión solo habilita los controles
+  // del proyector.
+  const [usuario, setUsuario] = useState(null);
+  const [cargandoSesion, setCargandoSesion] = useState(true);
+
+  useEffect(() => {
+    const unsubscribe = observarSesion((u) => {
+      setUsuario(u);
+      setCargandoSesion(false);
+    });
+    return () => unsubscribe();
+  }, []);
 
   function parseCurrentRoute() {
     // Check hash first: #/teacher/ADM-101 or #/join/ADM-101
@@ -74,6 +89,7 @@ export default function App() {
         onGoHome={route.view !== 'home' ? navigateToHome : null}
         currentSessionCode={route.sessionCode}
         role={route.view === 'teacher' ? 'teacher' : route.view === 'student' ? 'student' : null}
+        usuario={usuario}
       />
 
       <main className="flex-1">
@@ -81,6 +97,8 @@ export default function App() {
           <HomeView
             onNavigateToTeacher={navigateToTeacher}
             onNavigateToStudent={navigateToStudent}
+            usuario={usuario}
+            cargandoSesion={cargandoSesion}
           />
         )}
 
@@ -88,6 +106,8 @@ export default function App() {
           <TeacherView
             sessionCode={route.sessionCode}
             onGoHome={navigateToHome}
+            usuario={usuario}
+            cargandoSesion={cargandoSesion}
           />
         )}
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { db } from '../firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { QRCodeSVG } from 'qrcode.react';
+import { ingresarConGoogle, cerrarSesion, mensajeDeError } from '../auth';
 import { 
   Sparkles, 
   Presentation, 
@@ -14,10 +15,25 @@ import {
   BookOpen,
   MessageSquare,
   KeyRound,
-  Play
+  Play,
+  LogOut,
+  ShieldCheck,
+  AlertCircle
 } from 'lucide-react';
 
-export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
+// Logo oficial de Google (los cuatro colores), para el botón de ingreso.
+function GoogleIcon({ className = 'w-5 h-5' }) {
+  return (
+    <svg className={className} viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+    </svg>
+  );
+}
+
+export default function HomeView({ onNavigateToTeacher, onNavigateToStudent, usuario, cargandoSesion }) {
   // Form State for creating session
   const [title, setTitle] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -36,6 +52,32 @@ export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
 
+  // Estado del ingreso docente
+  const [ingresando, setIngresando] = useState(false);
+  const [errorIngreso, setErrorIngreso] = useState('');
+
+  const handleIngresarDocente = async () => {
+    setErrorIngreso('');
+    setIngresando(true);
+    try {
+      await ingresarConGoogle();
+    } catch (err) {
+      console.error('Error al iniciar sesión docente:', err);
+      setErrorIngreso(mensajeDeError(err));
+    } finally {
+      setIngresando(false);
+    }
+  };
+
+  const handleCerrarSesionDocente = async () => {
+    if (!window.confirm('¿Cerrar la sesión docente en esta computadora?')) return;
+    try {
+      await cerrarSesion();
+    } catch (err) {
+      console.error('Error al cerrar sesión docente:', err);
+    }
+  };
+
   // Random Code Generator
   const generateRandomCode = () => {
     const prefixes = ['ADM', 'DER', 'MED', 'CS', 'ECO', 'FILO', 'ING', 'PSI', 'SOC', 'BIO'];
@@ -51,6 +93,12 @@ export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
   const handleCreateSession = async (e) => {
     e.preventDefault();
     setCreateError('');
+
+    // Solo un docente con sesión iniciada puede crear la sesión de clase.
+    if (!usuario) {
+      setCreateError('Iniciá sesión con tu cuenta docente para crear una sesión de clase.');
+      return;
+    }
 
     if (!title.trim()) {
       setCreateError('Por favor, ingresa el nombre de la materia o tema.');
@@ -139,6 +187,12 @@ export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
       }
 
       if (joinRole === 'teacher') {
+        // El proyector solo se abre con la cuenta docente iniciada.
+        if (!usuario) {
+          setJoinError('Para entrar como Docente / Proyector, primero iniciá sesión con tu cuenta docente. Si sos alumno, elegí la opción Estudiante.');
+          setIsJoining(false);
+          return;
+        }
         onNavigateToTeacher(code);
       } else {
         onNavigateToStudent(code);
@@ -179,17 +233,106 @@ export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Column: Create Session */}
+        {/* Left Column: ingreso docente o creación de sesión */}
+        {cargandoSesion ? (
+          <div className="lg:col-span-7 bg-slate-800/80 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/30 backdrop-blur-sm">
+            <div className="flex items-center gap-3 text-slate-300 py-8 justify-center">
+              <span className="w-5 h-5 border-2 border-indigo-500/40 border-t-indigo-500 rounded-full animate-spin"></span>
+              <span className="text-sm font-medium">Verificando tu cuenta docente...</span>
+            </div>
+          </div>
+        ) : !usuario ? (
+          <div className="lg:col-span-7 bg-slate-800/80 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/30 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-700/60">
+              <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
+                <Presentation className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-white">Crear una sesión de clase</h2>
+                <p className="text-xs text-slate-400">Disponible para el equipo docente</p>
+              </div>
+            </div>
+
+            <div className="text-center py-4">
+              <div className="w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center mx-auto mb-4 text-indigo-300">
+                <ShieldCheck className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">
+                Ingresá con tu cuenta docente
+              </h3>
+              <p className="text-sm text-slate-300 max-w-md mx-auto leading-relaxed mb-6">
+                Para crear sesiones y manejar el proyector necesitás identificarte una sola vez
+                con tu cuenta de Google. Después queda recordada en esta computadora.
+                <span className="block mt-2 text-slate-400">
+                  Los alumnos no necesitan cuenta: entran con el código o el QR, como siempre.
+                </span>
+              </p>
+
+              {errorIngreso && (
+                <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs text-left flex items-start gap-2 max-w-md mx-auto">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{errorIngreso}</span>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleIngresarDocente}
+                disabled={ingresando}
+                className="inline-flex items-center justify-center gap-2.5 py-3.5 px-7 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-base shadow-lg transition transform active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {ingresando ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin"></span>
+                    Conectando con Google...
+                  </>
+                ) : (
+                  <>
+                    <GoogleIcon className="w-5 h-5" />
+                    Ingresar con Google
+                  </>
+                )}
+              </button>
+
+              <p className="text-[11px] text-slate-500 mt-4">
+                Usá la cuenta institucional o personal con la que te habilitó la cátedra.
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="lg:col-span-7 bg-slate-800/80 border border-slate-700/80 rounded-3xl p-6 sm:p-8 shadow-xl shadow-black/30 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-700/60">
             <div className="p-2.5 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/30">
               <Presentation className="w-6 h-6" />
             </div>
-            <div>
+            <div className="flex-1">
               <h2 className="text-xl font-bold text-white">Nueva Sesión de Clase</h2>
               <p className="text-xs text-slate-400">Configura la actividad para proyectar en el aula</p>
             </div>
+            <span className="hidden sm:inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <ShieldCheck className="w-3 h-3" /> Docente
+            </span>
           </div>
+
+          {usuario && (
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-slate-900/70 border border-slate-700/70">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Sesión iniciada</p>
+                <p className="text-xs font-bold text-slate-100 truncate" title={usuario.email || ''}>
+                  {usuario.displayName || usuario.email}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCerrarSesionDocente}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 hover:text-red-300 bg-slate-800 hover:bg-red-950/40 border border-slate-700 hover:border-red-500/40 rounded-lg transition"
+                title="Cerrar la sesión docente en esta computadora"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Cerrar sesión
+              </button>
+            </div>
+          )}
 
           <form onSubmit={handleCreateSession} className="space-y-5">
             {createError && (
@@ -270,6 +413,7 @@ export default function HomeView({ onNavigateToTeacher, onNavigateToStudent }) {
             </button>
           </form>
         </div>
+        )}
 
         {/* Right Column: Join Session + Info */}
         <div className="lg:col-span-5 space-y-6">

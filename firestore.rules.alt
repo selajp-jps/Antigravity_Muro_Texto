@@ -1,0 +1,17 @@
+rules_version = '2';
+
+// ---------------------------------------------------------------------------
+//  ARCHIVO SUPERADO - NO PUBLICAR ESTE.
+//
+//  Su contenido quedó integrado en firestore.rules, que ahora acepta las dos
+//  formas de autorizar al docente (cuenta de Firebase Authentication o código
+//  de cátedra). Publicá firestore.rules.
+// ---------------------------------------------------------------------------
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

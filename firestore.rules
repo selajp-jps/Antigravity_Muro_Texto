@@ -1,0 +1,148 @@
+rules_version = '2';
+
+// ============================================================================
+//  MURO DIGITAL UNIVERSITARIO - Reglas de seguridad de Cloud Firestore
+//  Proyecto: muro-clases
+//
+//  ---------------------------------------------------------------------------
+//  QUE HACE ESTE ARCHIVO (en palabras simples)
+//  ---------------------------------------------------------------------------
+//  Es el reglamento del deposito donde viven las consignas y las respuestas:
+//
+//    - Los ALUMNOS pueden ver la consigna y mandar UNA respuesta. No pueden
+//      borrar nada, ni editar lo ya enviado, ni revelar las opiniones.
+//    - Los DOCENTES (con su cuenta de Google autorizada) pueden revelar,
+//      bloquear, limpiar respuestas y borrar sesiones.
+//    - Cualquier otra persona en Internet no puede hacer absolutamente nada.
+//
+//  Este reglamento NO vence (a diferencia del "modo de prueba" que vencia).
+//
+//  OJO: no escribas acentos ni enies en este archivo. La consola de Firebase
+//  los rechaza con errores de sintaxis. La explicacion larga, en castellano
+//  con acentos, esta en README-SEGURIDAD.md.
+//
+//  ---------------------------------------------------------------------------
+//  ESTADO: LISTO PARA PUBLICAR
+//  ---------------------------------------------------------------------------
+//  El UID del docente responsable ya esta cargado mas abajo. Solo falta pegar
+//  todo este archivo en la consola: Firestore Database -> Reglas -> Publicar.
+//
+//  Para sumar OTROS docentes del equipo, NO hace falta tocar este archivo:
+//  en la consola, crea la coleccion `docentes` y, dentro, un documento por
+//  cada docente: el NOMBRE del documento es el UID de esa persona y adentro
+//  se puede guardar su email (opcional, solo para saber quien es). Son 30
+//  segundos por persona. Para dar de baja a alguien, borra su documento.
+//
+//  Truco para copiar el UID de un docente nuevo: que entre una vez a la app
+//  con su cuenta de Google; despues aparece en Authentication -> Users.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------
+    //  DOCENTES INICIALES (el responsable del proyecto). Para sumar gente
+    //  se usa la coleccion `docentes`, no este archivo.
+    // ------------------------------------------------------------------
+    function DOCENTES_INICIALES() {
+      return [
+        'N0HtEZBV3ibY84jHHCHQsR9DQHF2'
+      ];
+    }
+
+    function esDocente() {
+      return request.auth != null
+        && (
+          request.auth.uid in DOCENTES_INICIALES()
+          || exists(/databases/$(database)/documents/docentes/$(request.auth.uid))
+        );
+    }
+
+    // Solo el responsable administra la lista de docentes.
+    function esResponsable() {
+      return request.auth != null
+        && request.auth.uid in DOCENTES_INICIALES();
+    }
+
+    function textoValido(t) {
+      return t is string && t.size() > 0 && t.size() <= 1000;
+    }
+
+    // ---------------- Sesiones / consignas de clase ----------------
+    match /sessions/{sessionId} {
+      // Cualquier alumno con el enlace o el codigo lee la consigna y el
+      // estado (bloqueada / revelada) en tiempo real.
+      allow read: if true;
+
+      // Crear una sesion: solo docentes, y con datos bien formados.
+      allow create: if esDocente()
+        && request.resource.data.code == sessionId
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.prompt is string
+        && request.resource.data.prompt.size() > 0
+        && request.resource.data.locked == false
+        && request.resource.data.revealed == false
+        && request.resource.data.createdAt == request.time;
+
+      // Bloquear/reanudar y revelar/ocultar: solo docentes.
+      // No se puede cambiar el codigo, el titulo ni la consigna de una
+      // sesion ya creada.
+      allow update: if esDocente()
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.title == resource.data.title
+        && request.resource.data.prompt == resource.data.prompt
+        && request.resource.data.locked is bool
+        && request.resource.data.revealed is bool;
+
+      // Borrar una sesion completa: solo docentes.
+      allow delete: if esDocente();
+
+      // ---------------- Respuestas de los alumnos ----------------
+      match /responses/{responseId} {
+        // Lectura publica: el alumno ve el contador en vivo y el docente
+        // lee las respuestas desde el proyector.
+        allow read: if true;
+
+        // Cualquier alumno manda su respuesta, sin registrarse, pero el
+        // documento tiene que respetar exactamente el formato de la app.
+        allow create: if textoValido(request.resource.data.text)
+          && request.resource.data.author is string
+          && request.resource.data.author.size() > 0
+          && request.resource.data.author.size() <= 50
+          && request.resource.data.isAnonymous is bool
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.sessionId == sessionId
+          && request.resource.data.keys().hasOnly(
+               ['text', 'author', 'isAnonymous', 'createdAt', 'sessionId']);
+
+        // Nadie edita una respuesta ya enviada, ni siquiera su autor.
+        allow update: if false;
+
+        // "Limpiar respuestas" del docente.
+        allow delete: if esDocente();
+      }
+    }
+
+    // ---------------- Lista de docentes autorizados ----------------
+    // La administra el responsable desde la consola de Firebase: un
+    // documento por docente, con su UID como nombre del documento.
+    // Para armar la lista, cada docente tiene que haber entrado alguna vez
+    // con su cuenta (asi Firebase le asigna un UID).
+    match /docentes/{uid} {
+      allow read: if request.auth != null;
+      // Solo el responsable agrega docentes. Si alguna vez te quedas afuera,
+      // la lista se puede editar desde Firestore -> Datos (esa via no pasa
+      // por estas reglas).
+      allow create: if esResponsable()
+        && request.resource.data.keys().hasOnly(['email', 'nombre', 'alta']);
+      allow delete: if esResponsable();
+      allow update: if false;
+    }
+
+    // Todo lo que no este contemplado arriba queda prohibido.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

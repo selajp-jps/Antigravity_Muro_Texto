@@ -10,6 +10,7 @@ import {
   getDocs, 
   deleteDoc 
 } from 'firebase/firestore';
+import { ingresarConGoogle, mensajeDeError } from '../auth';
 import confetti from 'canvas-confetti';
 import { 
   Eye, 
@@ -29,7 +30,9 @@ import {
   Users,
   AlertCircle,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  LogIn,
+  ShieldCheck
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import ResponseCard from '../components/ResponseCard';
@@ -37,7 +40,7 @@ import QRCodeModal from '../components/QRCodeModal';
 import ConfirmationModal from '../components/ConfirmationModal';
 import { copyResponsesToClipboard, downloadResponsesAsText } from '../utils/exportUtils';
 
-export default function TeacherView({ sessionCode, onGoHome }) {
+export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSesion }) {
   const [session, setSession] = useState(null);
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +53,23 @@ export default function TeacherView({ sessionCode, onGoHome }) {
   const [isClearing, setIsClearing] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Estado del ingreso docente (para la pantalla de acceso al proyector)
+  const [ingresando, setIngresando] = useState(false);
+  const [errorIngreso, setErrorIngreso] = useState('');
+
+  const handleIngresarDocente = async () => {
+    setErrorIngreso('');
+    setIngresando(true);
+    try {
+      await ingresarConGoogle();
+    } catch (err) {
+      console.error('Error al iniciar sesión docente:', err);
+      setErrorIngreso(mensajeDeError(err));
+    } finally {
+      setIngresando(false);
+    }
+  };
 
   // Track previous count for animation and sound/confetti
   const prevCountRef = useRef(0);
@@ -230,6 +250,71 @@ export default function TeacherView({ sessionCode, onGoHome }) {
 
   const isRevealed = !!session.revealed;
   const isLocked = !!session.locked;
+
+  // ---------------------------------------------------------------------
+  //  CONTROL DE ACCESO AL PROYECTOR
+  //  Ver la sesión y el contador es libre (lo necesita el aula), pero los
+  //  controles de docente exigen la cuenta del equipo. Si no hay sesión
+  //  iniciada, en lugar del panel se muestra el ingreso.
+  // ---------------------------------------------------------------------
+  if (!usuario) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center px-4 py-10">
+        <div className="max-w-lg w-full bg-slate-800/90 border border-slate-700/80 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto mb-4 text-amber-300">
+            <Lock className="w-7 h-7" />
+          </div>
+
+          <h2 className="text-2xl font-bold text-white mb-2">Panel del docente</h2>
+          <p className="text-sm text-slate-300 leading-relaxed mb-1">
+            Sesión <span className="font-mono font-bold text-indigo-400">{sessionCode}</span> —{' '}
+            {session.title || 'sin título'}
+          </p>
+          <p className="text-sm text-slate-400 leading-relaxed mb-6">
+            Para revelar opiniones, pausar envíos o limpiar respuestas necesitás ingresar con tu
+            cuenta docente. Los alumnos siguen respondiendo normalmente desde el QR o el código.
+          </p>
+
+          {errorIngreso && (
+            <div className="mb-4 p-3.5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-300 text-xs text-left flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorIngreso}</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleIngresarDocente}
+            disabled={ingresando || cargandoSesion}
+            className="w-full inline-flex items-center justify-center gap-2.5 py-3.5 px-6 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-base shadow-lg transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {ingresando || cargandoSesion ? (
+              <>
+                <span className="w-5 h-5 border-2 border-slate-400 border-t-slate-800 rounded-full animate-spin"></span>
+                Conectando con Google...
+              </>
+            ) : (
+              <>
+                <LogIn className="w-5 h-5" />
+                Ingresar con Google
+              </>
+            )}
+          </button>
+
+          <div className="mt-5 pt-5 border-t border-slate-700/60 flex items-center justify-center gap-2 text-[11px] text-slate-500">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            Acceso exclusivo del equipo docente autorizado
+          </div>
+
+          <button
+            onClick={onGoHome}
+            className="mt-4 text-xs font-semibold text-slate-400 hover:text-white transition"
+          >
+            Volver a la pantalla principal
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-16">
