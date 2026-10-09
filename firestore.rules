@@ -85,18 +85,23 @@ service cloud.firestore {
         && request.resource.data.revealed == false
         && request.resource.data.createdAt == request.time;
 
-      // Bloquear/reanudar y revelar/ocultar: solo docentes.
-      // No se puede cambiar el codigo, el titulo ni la consigna de una
-      // sesion ya creada.
+      // Actualizar una sesion: solo docentes.
+      // El codigo de la sesion nunca se puede cambiar (es la direccion del
+      // aula). El titulo y la consigna si, porque la app permite reutilizar
+      // un codigo para otra clase.
       allow update: if esDocente()
         && request.resource.data.code == resource.data.code
-        && request.resource.data.title == resource.data.title
-        && request.resource.data.prompt == resource.data.prompt
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.prompt is string
+        && request.resource.data.prompt.size() > 0
         && request.resource.data.locked is bool
         && request.resource.data.revealed is bool;
 
-      // Borrar una sesion completa: solo docentes.
-      allow delete: if esDocente();
+      // Borrar una sesion completa: SOLO el responsable del proyecto.
+      // Los demas docentes pueden revelar, pausar y limpiar respuestas, pero
+      // no eliminar la sesion (para eso esta "Limpiar respuestas").
+      allow delete: if esResponsable();
 
       // ---------------- Respuestas de los alumnos ----------------
       match /responses/{responseId} {
@@ -105,16 +110,16 @@ service cloud.firestore {
         allow read: if true;
 
         // Cualquier alumno manda su respuesta, sin registrarse, pero el
-        // documento tiene que respetar exactamente el formato de la app.
+        // documento tiene que respetar exactamente el formato de la app:
+        // text, author, isAnonymous y createdAt. Nada mas, nada menos.
         allow create: if textoValido(request.resource.data.text)
           && request.resource.data.author is string
           && request.resource.data.author.size() > 0
           && request.resource.data.author.size() <= 50
           && request.resource.data.isAnonymous is bool
           && request.resource.data.createdAt == request.time
-          && request.resource.data.sessionId == sessionId
           && request.resource.data.keys().hasOnly(
-               ['text', 'author', 'isAnonymous', 'createdAt', 'sessionId']);
+               ['text', 'author', 'isAnonymous', 'createdAt']);
 
         // Nadie edita una respuesta ya enviada, ni siquiera su autor.
         allow update: if false;

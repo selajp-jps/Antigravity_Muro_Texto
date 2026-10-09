@@ -47,6 +47,22 @@ export function nombreCorto(usuario) {
   return 'Docente';
 }
 
+// ---------------------------------------------------------------------------
+//  RESPONSABLE DEL PROYECTO
+//
+//  Es la unica cuenta que puede borrar sesiones completas. Los demas docentes
+//  pueden revelar, pausar y limpiar respuestas, pero no eliminar la sesion.
+//
+//  Este dato sirve solo para mostrar u ocultar el boton en la interfaz: el
+//  permiso real lo aplica Firestore (ver firestore.rules). Aunque alguien
+//  modificara la pagina para forzar el boton, la base rechaza el borrado.
+// ---------------------------------------------------------------------------
+export const RESPONSABLE_UID = 'N0HtEZBV3ibY84jHHCHQsR9DQHF2';
+
+export function esResponsable(usuario) {
+  return Boolean(usuario) && usuario.uid === RESPONSABLE_UID;
+}
+
 // Traduce los errores de Firebase a algo que se entienda en pantalla.
 export function mensajeDeError(error) {
   const codigo = error?.code || '';

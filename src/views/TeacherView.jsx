@@ -10,7 +10,7 @@ import {
   getDocs, 
   deleteDoc 
 } from 'firebase/firestore';
-import { ingresarConGoogle, mensajeDeError } from '../auth';
+import { ingresarConGoogle, mensajeDeError, esResponsable } from '../auth';
 import confetti from 'canvas-confetti';
 import { 
   Eye, 
@@ -51,6 +51,10 @@ export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSe
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isClearModalOpen, setIsClearModalOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+
+  // Borrado de la sesión completa (solo el responsable del proyecto)
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [copiedToast, setCopiedToast] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -198,6 +202,34 @@ export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSe
       alert('Error al limpiar respuestas: ' + err.message);
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  // Borrar la sesión completa: primero las respuestas y después la sesión.
+  // En Firestore, borrar un documento NO borra sus subcolecciones, por eso
+  // hacemos los dos pasos: si no, quedarían respuestas huérfanas ocupando
+  // lugar y sin forma de verlas desde la app.
+  // Esta acción está reservada al responsable del proyecto (reglas de la base).
+  const handleDeleteSession = async () => {
+    setIsDeleting(true);
+    try {
+      const responsesRef = collection(db, 'sessions', sessionCode, 'responses');
+      const snap = await getDocs(responsesRef);
+      const deletePromises = snap.docs.map((docSnap) => deleteDoc(docSnap.ref));
+      await Promise.all(deletePromises);
+
+      await deleteDoc(doc(db, 'sessions', sessionCode));
+
+      setIsDeleteModalOpen(false);
+      onGoHome();
+    } catch (err) {
+      console.error('Error al borrar la sesión:', err);
+      alert(
+        'No se pudo borrar la sesión: ' + (err.message || 'error desconocido') +
+        '\n\nSi tu cuenta no es la del responsable del proyecto, la base rechaza esta acción.'
+      );
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -461,7 +493,7 @@ export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSe
               <Download className="w-4 h-4" />
             </button>
 
-            {/* 7. REINICIAR / LIMPIAR */}
+            {/* 7. REINICIAR / LIMPIAR (todos los docentes) */}
             <button
               onClick={() => setIsClearModalOpen(true)}
               className="p-2 bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-300 border border-slate-700 hover:border-red-500/40 rounded-xl transition"
@@ -470,7 +502,19 @@ export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSe
               <Trash2 className="w-4 h-4" />
             </button>
 
-            {/* 8. PANTALLA COMPLETA */}
+            {/* 8. BORRAR SESIÓN COMPLETA (solo el responsable del proyecto) */}
+            {esResponsable(usuario) && (
+              <button
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-red-950/50 hover:bg-red-900/60 text-red-200 border border-red-600/50 rounded-xl text-xs sm:text-sm font-semibold transition"
+                title="Eliminar esta sesión y todas sus respuestas (solo el responsable)"
+              >
+                <Trash2 className="w-4 h-4 text-red-300" />
+                <span className="hidden lg:inline">Borrar sesión</span>
+              </button>
+            )}
+
+            {/* 9. PANTALLA COMPLETA */}
             <button
               onClick={toggleFullscreen}
               className="p-2 bg-slate-800 hover:bg-slate-750 text-slate-200 border border-slate-700 rounded-xl transition hidden sm:block"
@@ -670,6 +714,17 @@ export default function TeacherView({ sessionCode, onGoHome, usuario, cargandoSe
         title="¿Reiniciar respuestas de la sesión?"
         message={`Esta acción borrará las ${responses.length} respuestas recibidas para el código "${session.code}". Podrás reutilizar este mismo código con otra comisión o turno.`}
         confirmText="Sí, borrar y reiniciar"
+      />
+
+      {/* Modal Delete Session (solo responsable del proyecto) */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDeleteSession}
+        isLoading={isDeleting}
+        title="¿Eliminar la sesión completa?"
+        message={`Se borrará la sesión "${session.title}" (código ${session.code}) y sus ${responses.length} respuestas. Esta acción no se puede deshacer. Para reutilizar el código con otra comisión, usá "Limpiar respuestas" en lugar de borrar.`}
+        confirmText="Sí, eliminar definitivamente"
       />
     </div>
   );
