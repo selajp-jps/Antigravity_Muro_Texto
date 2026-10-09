@@ -18,6 +18,10 @@ dist-ssr
 .env.*.local
 !.env.example
 
+# Datos de configuracion de la catedra (no se publican)
+# Contiene la clave de API y el UID del responsable del proyecto.
+CONFIGURACION-MURO-DIGITAL.txt
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
